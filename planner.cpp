@@ -37,7 +37,7 @@ using namespace std;
 #define	MIN(A, B)	((A) < (B) ? (A) : (B))
 #endif
 
-#define NUMOFDIRS 8
+#define NUMOFDIRS 9
 
 //#######################################################################################################################
 
@@ -74,28 +74,28 @@ struct coordinate
 
 public:
     pair<int,int> point;
-    double g_cost;
-    double h_cost;
-    double f_cost;
+    double gcost;
+    double hcost;
+    double fcost;
     friend bool operator== (const coordinate &c1, const coordinate &c2);
     friend bool operator!= (const coordinate &c1, const coordinate &c2);
 
     void update_fcost()
     {
-        f_cost = g_cost + h_cost;
+        fcost = gcost + hcost;
     }
 
     void update_hcost(pair<int,int> goal_position)
     {
         /// This is the present heuristic (Euclidian for now)
-        h_cost = (double)sqrt(((point.first-goal_position.first)*(point.first-goal_position.first) + (point.second-goal_position.second)*(point.second-goal_position.second)));
+        hcost = (double)sqrt(((point.first-goal_position.first)*(point.first-goal_position.first) + (point.second-goal_position.second)*(point.second-goal_position.second)));
     }
 
     coordinate(int x,
                int y,
                pair<int,int> target_pos):
                point(make_pair(x,y)),
-               g_cost(INT_MAX){
+               gcost(INT_MAX){
         update_hcost(target_pos);
         update_fcost();
     }
@@ -125,7 +125,37 @@ planning_essentials p{3.0,1.0}; /// This is hard-coded as of now. But think over
 
 //#######################################################################################################################
 
-void expand
+void expand_state(const coordinate &state_to_expand,
+                  priority_queue<coordinate, vector<coordinate>, Comp> &open,
+                  vector<vector<coordinate>> &cost_map,
+                  const int* dX,
+                  const int* dY,
+                  const int &robotposeX,
+                  const int &robotposeY,
+                  const int &x_size,
+                  const int &y_size,
+                  const double*	&map)
+{
+    for(size_t dir = 0; dir < NUMOFDIRS; dir++)
+    {
+        int newx = robotposeX + dX[dir];
+        int newy = robotposeY + dY[dir];
+
+        if (newx >= 1 && newx <= x_size && newy >= 1 && newy <= y_size)
+        {
+            if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
+            {
+                if(cost_map[newx][newy].gcost > cost_map[robotposeX][robotposeY].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
+                {
+                    cost_map[newx][newy].gcost = cost_map[robotposeX][robotposeY].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
+                    cost_map[newx][newy].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
+                    open.push(cost_map[newx][newy]);
+                }
+            }
+        }
+    }
+}
+
 //#######################################################################################################################
 
 static void planner(
@@ -165,7 +195,7 @@ static void planner(
     }
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
 
-    cost_map[0][0].g_cost = 0.0;
+    cost_map[0][0].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)];
     cost_map[0][0].update_fcost();
 
     open.push(cost_map[0][0]);
