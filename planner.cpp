@@ -99,12 +99,22 @@ public:
         update_hcost(target_pos);
         update_fcost();
     }
+
+    ostream& operator << (ostream &out, const coordinate &c)
+    {
+        out << c.point.first;
+        out <<",";
+        out << c.point.second;
+        out << endl;
+        out << gcost <<"\t"<<hcost<<"\t"<<fcost<<endl;
+        return out;
+    }
 };
 
 bool operator== (const coordinate &c1, const coordinate &c2)
 {
     return (c1.point.first== c2.point.first &&
-            c1.point.second== c2.point_second);
+            c1.point.second== c2.point.second);
 }
 
 bool operator!= (const coordinate &c1, const coordinate &c2)
@@ -114,7 +124,7 @@ bool operator!= (const coordinate &c1, const coordinate &c2)
 
 struct Comp{
     bool operator()(const coordinate &a, const coordinate &b){
-        return a.cost>b.cost;
+        return a.fcost>b.fcost;
     }
 };
 
@@ -134,7 +144,9 @@ void expand_state(const coordinate &state_to_expand,
                   const int &robotposeY,
                   const int &x_size,
                   const int &y_size,
-                  const double*	&map)
+                  const double*	&map,
+                  const set<coordinate> &closed,
+                  const int &collision_thresh)
 {
     for(size_t dir = 0; dir < NUMOFDIRS; dir++)
     {
@@ -145,15 +157,56 @@ void expand_state(const coordinate &state_to_expand,
         {
             if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
             {
-                if(cost_map[newx][newy].gcost > cost_map[robotposeX][robotposeY].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
+                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[robotposeX-1][robotposeY-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
                 {
-                    cost_map[newx][newy].gcost = cost_map[robotposeX][robotposeY].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
-                    cost_map[newx][newy].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
-                    open.push(cost_map[newx][newy]);
+                    cost_map[newx-1][newy-1].gcost = cost_map[robotposeX-1][robotposeY-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
+                    cost_map[newx-1][newy-1].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
+                    open.push(cost_map[newx-1][newy-1]);
                 }
             }
         }
     }
+}
+
+//#######################################################################################################################
+
+pair<int,int> backtrack(vector<vector<coordinate>> &cost_map,
+                        const int* dX,
+                        const int* dY,
+                        const int &x_size,
+                        const int &y_size,
+                        const coordinate &goal_coordinate,
+                        const coordinate &start_coordinate)
+{
+    vector<coordinate> stack;
+    stack.push_back(goal_coordinate);
+    auto curr_coordinate = goal_coordinate;
+    while(curr_coordinate!=start_coordinate)
+    {
+        double g_min=INT_MAX;
+        int bestx = -1;
+        int besty = -1;
+        for(size_t dir = 0; dir < NUMOFDIRS; dir++)
+        {
+            int newx = curr_coordinate.point.first + dX[dir];
+            int newy = curr_coordinate.point.second + dY[dir];
+            // newx and newy are 0 indexed since goal and start coords are zero indexed in the planner function
+            if (newx >= 0 && newx < x_size && newy >= 0 && newy < y_size)
+            {
+                if(cost_map[newx][newy].gcost<g_min)
+                {
+                    g_min = cost_map[newx][newy].gcost;
+                    bestx = newx;
+                    besty = newy;
+                }
+            }
+        }
+        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
+        stack.push_back(curr_coordinate);
+    }
+
+    return stack[stack.size()-2].point; //Last point is start, I need to return the point before that
+
 }
 
 //#######################################################################################################################
@@ -180,7 +233,8 @@ static void planner(
     priority_queue<coordinate, vector<coordinate>, Comp> open;
     set<coordinate> closed;
     vector<vector<coordinate>> cost_map;
-    coordinate goal_coordinate(targetposeX,targetposeY,make_pair(targetposeX,targetposeY));
+    const coordinate goal_coordinate(targetposeX-1,targetposeY-1,make_pair(targetposeX-1,targetposeY-1));
+    const coordinate start_coordinate(robotposeX-1,robotposeY-1,make_pair(robotposeX-1,robotposeY-1));
 
     /// As of now we are planning for the goal position. Add look-ahead and see if performance improves.
     /// Also see how to keep a variables scope till lifetime. ie. it doesn't looses it's value. Once the planner outputs its value
@@ -190,69 +244,48 @@ static void planner(
     {
         for(size_t j=0;j<y_size;j++)
         {
-            cost_map[i][j] = coordinate(i,j,make_pair(targetposeX,targetposeY));
+            cost_map[i][j] = coordinate(i,j,make_pair(targetposeX-1,targetposeY-1));
         }
     }
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
 
-    cost_map[0][0].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)];
-    cost_map[0][0].update_fcost();
+    cost_map[robotposeX-1][robotposeX-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
+    cost_map[robotposeX-1][robotposeX-1].update_fcost();
 
-    open.push(cost_map[0][0]);
+    open.push(cost_map[robotposeX-1][robotposeX-1]);
+
+    cout<<"Start_pose = "<<open.top();
+    cout<<endl;
+    cout<<"Goal pose = "<<goal_coordinate;
+    cout<<endl<<"======================================================================="<<endl;
 
     while (!open.empty() || closed.count(goal_coordinate))
     {
         const auto state_to_expand = open.top();
         open.pop();
         closed.insert(state_to_expand);
-        expand_state(state_to_expand,open,cost_map);
+        expand_state(state_to_expand,open,cost_map,dX,dY,robotposeX,robotposeY,x_size,y_size,map,closed,collision_thresh);
+        cout<<"Expanded state was: "<<state_to_expand<<endl;
+        cout<<"======================================================="<<endl;
     }
 
-
-    // for now greedily move towards the final target position,
-    // but this is where you can put your planner
-
-//    int goalposeX = (int) target_traj[target_steps-1];
-//    int goalposeY = (int) target_traj[target_steps-1+target_steps]; //target_traj is probably of the length 2*target step. First all the X and then all the Y.
-//    printf("robot: %d %d;\n", robotposeX, robotposeY);
-//    printf("goal: %d %d;\n", goalposeX, goalposeY);
-//    int bestX = 0, bestY = 0; // robot will not move if greedy action leads to collision
-
-//    double olddisttotarget = (double)sqrt(((robotposeX-goalposeX)*(robotposeX-goalposeX) + (robotposeY-goalposeY)*(robotposeY-goalposeY)));
-//    double disttotarget;
-//    for(int dir = 0; dir < NUMOFDIRS; dir++)
-//    {
-//        int newx = robotposeX + dX[dir];
-//        int newy = robotposeY + dY[dir];
-//
-//        if (newx >= 1 && newx <= x_size && newy >= 1 && newy <= y_size)
-//        {
-//            if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
-//            {
-//                disttotarget = (double)sqrt(((newx-goalposeX)*(newx-goalposeX) + (newy-goalposeY)*(newy-goalposeY)));
-//                if(disttotarget < olddisttotarget)
-//                {
-//                    olddisttotarget = disttotarget;
-//                    bestX = dX[dir];
-//                    bestY = dY[dir];
-//                }
-//            }
-//        }
-//    }
-
-    robotposeX = robotposeX + bestX;
-    robotposeY = robotposeY + bestY;
+    const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+    robotposeX = best_next_coordinate.first;
+    robotposeY = best_next_coordinate.second;
     action_ptr[0] = robotposeX;
     action_ptr[1] = robotposeY;
-    
+
     return;
 }
+
+// ###################################################################################################################
 
 // Ideas for the planner
 // First simply code an A* with Euclidian heuristic and see how it performs.
 // You can then try the same with the look-ahead method
 // Try saving the last distance from the goal to the start and use it to compute your look-ahead.
 // See if implicit graphs can make the planner more efficient
+// Now change heuristic and see how code performs
 
 // prhs contains input parameters (4):
 // 1st is matrix with all the obstacles
