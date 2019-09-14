@@ -79,6 +79,8 @@ public:
     double fcost;
     friend bool operator== (const coordinate &c1, const coordinate &c2);
     friend bool operator!= (const coordinate &c1, const coordinate &c2);
+    friend bool operator< (const coordinate &c1, const coordinate &c2);
+//    friend ostream& operator << (ostream &out, const coordinate &c);
 
     void update_fcost()
     {
@@ -99,16 +101,6 @@ public:
         update_hcost(target_pos);
         update_fcost();
     }
-
-    ostream& operator << (ostream &out, const coordinate &c)
-    {
-        out << c.point.first;
-        out <<",";
-        out << c.point.second;
-        out << endl;
-        out << gcost <<"\t"<<hcost<<"\t"<<fcost<<endl;
-        return out;
-    }
 };
 
 bool operator== (const coordinate &c1, const coordinate &c2)
@@ -122,9 +114,24 @@ bool operator!= (const coordinate &c1, const coordinate &c2)
     return !(c1== c2);
 }
 
+bool operator< (const coordinate &c1, const coordinate &c2)
+{
+    return c1.fcost < c2.fcost;
+}
+
+//ostream& operator << (ostream &out, const coordinate &c)
+//{
+//    out << c.point.first;
+//    out <<",";
+//    out << c.point.second;
+//    out << endl;
+//    out << gcost <<"\t"<<hcost<<"\t"<<fcost<<endl;
+//    return out;
+//}
+
 struct Comp{
     bool operator()(const coordinate &a, const coordinate &b){
-        return a.fcost>b.fcost;
+        return a.fcost<b.fcost;
     }
 };
 
@@ -144,7 +151,7 @@ void expand_state(const coordinate &state_to_expand,
                   const int &robotposeY,
                   const int &x_size,
                   const int &y_size,
-                  const double*	&map,
+                  const double*	map,
                   const set<coordinate> &closed,
                   const int &collision_thresh)
 {
@@ -254,9 +261,9 @@ static void planner(
 
     open.push(cost_map[robotposeX-1][robotposeX-1]);
 
-    cout<<"Start_pose = "<<open.top();
+    cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.first<<endl;
     cout<<endl;
-    cout<<"Goal pose = "<<goal_coordinate;
+    cout<<"Goal pose = "<<goal_coordinate.point.first<<","<<goal_coordinate.point.second<<endl;
     cout<<endl<<"======================================================================="<<endl;
 
     while (!open.empty() || closed.count(goal_coordinate))
@@ -265,8 +272,8 @@ static void planner(
         open.pop();
         closed.insert(state_to_expand);
         expand_state(state_to_expand,open,cost_map,dX,dY,robotposeX,robotposeY,x_size,y_size,map,closed,collision_thresh);
-        cout<<"Expanded state was: "<<state_to_expand<<endl;
-        cout<<"======================================================="<<endl;
+//        cout<<"Expanded state was: "<<state_to_expand<<endl;
+//        cout<<"======================================================="<<endl;
     }
 
     const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
