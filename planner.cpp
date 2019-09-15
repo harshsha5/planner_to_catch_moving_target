@@ -147,26 +147,27 @@ void expand_state(const coordinate &state_to_expand,
                   vector<vector<coordinate>> &cost_map,
                   const int* dX,
                   const int* dY,
-                  const int &robotposeX,
-                  const int &robotposeY,
                   const int &x_size,
                   const int &y_size,
                   const double*	map,
                   const set<coordinate> &closed,
                   const int &collision_thresh)
 {
+    const auto current_x = state_to_expand.point.first;
+    const auto current_y = state_to_expand.point.second;        //These are both zero indexed
+
     for(size_t dir = 0; dir < NUMOFDIRS; dir++)
     {
-        int newx = robotposeX + dX[dir];
-        int newy = robotposeY + dY[dir];
+        int newx = current_x + 1 + dX[dir];
+        int newy = current_y + 1 + dY[dir];
 
         if (newx >= 1 && newx <= x_size && newy >= 1 && newy <= y_size)
         {
             if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
             {
-                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[robotposeX-1][robotposeY-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
+                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[current_x-1][current_y-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
                 {
-                    cost_map[newx-1][newy-1].gcost = cost_map[robotposeX-1][robotposeY-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
+                    cost_map[newx-1][newy-1].gcost = cost_map[current_x-1][current_y-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
                     cost_map[newx-1][newy-1].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
                     open.push(cost_map[newx-1][newy-1]);
                 }
@@ -270,7 +271,7 @@ static void planner(
         const auto state_to_expand = open.top();
         open.pop();
         closed.insert(state_to_expand);
-        expand_state(state_to_expand,open,cost_map,dX,dY,robotposeX,robotposeY,x_size,y_size,map,closed,collision_thresh);
+        expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh);
 //        cout<<"Expanded state was: "<<state_to_expand<<endl;
 //        cout<<"======================================================="<<endl;
     }
