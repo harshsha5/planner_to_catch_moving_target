@@ -241,7 +241,7 @@ static void planner(
     set<coordinate> closed;
     vector<vector<coordinate>> cost_map;
     const coordinate goal_coordinate(targetposeX-1,targetposeY-1,make_pair(targetposeX-1,targetposeY-1));
-    const coordinate start_coordinate(robotposeX-1,robotposeY-1,make_pair(robotposeX-1,robotposeY-1));
+    const coordinate start_coordinate(robotposeX-1,robotposeY-1,make_pair(targetposeX-1,targetposeY-1));
 
     /// As of now we are planning for the goal position. Add look-ahead and see if performance improves.
     /// Also see how to keep a variables scope till lifetime. ie. it doesn't looses it's value. Once the planner outputs its value
@@ -255,18 +255,17 @@ static void planner(
         }
     }
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
+    cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
+    cost_map[robotposeX-1][robotposeY-1].update_fcost();
 
-    cost_map[robotposeX-1][robotposeX-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
-    cost_map[robotposeX-1][robotposeX-1].update_fcost();
+    open.push(cost_map[robotposeX-1][robotposeY-1]);
 
-    open.push(cost_map[robotposeX-1][robotposeX-1]);
-
-    cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.first<<endl;
+    cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.second<<endl;
     cout<<endl;
     cout<<"Goal pose = "<<goal_coordinate.point.first<<","<<goal_coordinate.point.second<<endl;
     cout<<endl<<"======================================================================="<<endl;
 
-    while (!open.empty() || closed.count(goal_coordinate))
+    while (!open.empty() || closed.count(goal_coordinate)==0)
     {
         const auto state_to_expand = open.top();
         open.pop();
