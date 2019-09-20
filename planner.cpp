@@ -10,6 +10,7 @@
 #include <queue>
 #include <set>
 #include <climits>
+#include <unordered_map>
 
 using namespace std;
 
@@ -41,34 +42,6 @@ using namespace std;
 
 //#######################################################################################################################
 
-class planning_essentials
-{
-    double big_look_ahead_time;
-    double small_look_ahead_time;
-
-public:
-    planning_essentials(double big_look_ahead,
-                        double small_look_ahead):
-                        big_look_ahead_time(big_look_ahead),
-                        small_look_ahead_time(small_look_ahead){}
-};
-
-//#######################################################################################################################
-
-class planner_return
-{
-    pair<int,int> next_step;
-    int steps_to_goal; /// These steps are for the least cost path and not for the shortest distance
-
-public:
-    planner_return(pair<int,int> next_steps,
-                    int steps_to_goal_from_start):
-                    next_step(next_steps),
-                    steps_to_goal(steps_to_goal_from_start){}
-};
-
-//#######################################################################################################################
-
 struct coordinate
 {
 
@@ -77,6 +50,7 @@ public:
     double gcost;
     double hcost;
     double fcost;
+    int time_to_reach;
     friend bool operator== (const coordinate &c1, const coordinate &c2);
     friend bool operator!= (const coordinate &c1, const coordinate &c2);
     friend bool operator< (const coordinate &c1, const coordinate &c2);
@@ -88,18 +62,19 @@ public:
         fcost = gcost + (epsilon*hcost);
     }
 
-    void update_hcost(pair<int,int> goal_position)
+    void update_hcost()
     {
         /// This is the present heuristic (Euclidian for now)
-        hcost = (double)sqrt(((point.first-goal_position.first)*(point.first-goal_position.first) + (point.second-goal_position.second)*(point.second-goal_position.second)));
+        //hcost = (double)sqrt(((point.first-goal_position.first)*(point.first-goal_position.first) + (point.second-goal_position.second)*(point.second-goal_position.second)));
+        hcost = 0; //Let's do Dijkastra first.
     }
 
     coordinate(int x,
                int y,
-               pair<int,int> target_pos):
+               int time):
                point(make_pair(x,y)),
-               gcost(INT_MAX){
-        update_hcost(target_pos);
+               gcost(INT_MAX),
+               hcost(0){
         update_fcost();
     }
 };
@@ -120,16 +95,6 @@ bool operator< (const coordinate &c1, const coordinate &c2)
     return c1.fcost < c2.fcost;
 }
 
-//ostream& operator << (ostream &out, const coordinate &c)
-//{
-//    out << c.point.first;
-//    out <<",";
-//    out << c.point.second;
-//    out << endl;
-//    out << gcost <<"\t"<<hcost<<"\t"<<fcost<<endl;
-//    return out;
-//}
-
 struct Comp{
     bool operator()(const coordinate &a, const coordinate &b){
         return a.fcost>b.fcost;
@@ -138,8 +103,6 @@ struct Comp{
 
 //#######################################################################################################################
 //Global Variable declaration
-
-planning_essentials p{3.0,1.0}; /// This is hard-coded as of now. But think over this and alter it according to mean planning time.
 
 //#######################################################################################################################
 
@@ -236,6 +199,25 @@ pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
 
 //#######################################################################################################################
 
+set<pair<int,int> get_target_trajectory_points(const double* target_traj,
+                                               const int &target_step,
+                                               unordered_map<pair<int,int>,int> point_count)
+{   /// This extracts all the target poses from the given target trajectory
+    /// Adds the unique ones in the set
+    /// But keeps track of duplication in the unordered_map
+    set<pair<int,int> target_trajectory_set;
+    for (size_t i=1; i<=target_steps;i++)
+    {
+        target_trajectory_set.insert(make_pair((int) target_traj[target_steps-1],(int) target_traj[target_steps-1+target_steps]));
+    };
+
+    return std::move(target_trajectory_set);
+}
+
+unordered_map<pair<int,int>,int> get_point_count_map(unordered_map<pair<int,int>,int> point_count,
+                                                        )
+//#######################################################################################################################
+
 static void planner(
         double*	map,
         int collision_thresh,
@@ -257,38 +239,33 @@ static void planner(
 
     priority_queue<coordinate, vector<coordinate>, Comp> open;
     set<coordinate> closed;
-    const coordinate random_init_coordinate(-1,-1,make_pair(targetposeX-1,targetposeY-1));
+    const coordinate random_init_coordinate(-1,-1,INT_MAX);
     vector<vector<coordinate>> cost_map(x_size,vector<coordinate> (y_size,random_init_coordinate));
-    const coordinate goal_coordinate(targetposeX-1,targetposeY-1,make_pair(targetposeX-1,targetposeY-1));
-    const coordinate start_coordinate(robotposeX-1,robotposeY-1,make_pair(targetposeX-1,targetposeY-1));
-
-    /// As of now we are planning for the goal position. Add look-ahead and see if performance improves.
-    /// Also see how to keep a variables scope till lifetime. ie. it doesn't looses it's value. Once the planner outputs its value
+    const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
 
     //CREATE COST_MAP
     for(size_t i=0;i<x_size;i++)
     {
         for(size_t j=0;j<y_size;j++)
         {
-            cost_map[i][j] = coordinate(i,j,make_pair(targetposeX-1,targetposeY-1));
+            cost_map[i][j] = coordinate(i,j,INT_MAX));
         }
     }
-
-    //Remove || It is just for testing
-    //cout<<"THIS IS IT!"<<endl;
-    //cout<<cost_map[10][10].point.first<<"\t"<<cost_map[10][10].point.second<<"\t"<<cost_map[10][10].gcost<<"\t"<<cost_map[10][10].hcost<<endl;
 
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
     cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
     cost_map[robotposeX-1][robotposeY-1].update_fcost();
-
     open.push(cost_map[robotposeX-1][robotposeY-1]);
 
-    //cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.second<<endl;
-    debug_result(cost_map[robotposeX-1][robotposeY-1],-1);
-    cout<<endl;
-    cout<<"Goal pose = "<<goal_coordinate.point.first<<","<<goal_coordinate.point.second<<endl;
-    cout<<endl<<"======================================================================="<<endl;
+    /// This stores the point and the various times to reach those points
+    unordered_map<pair<int,int>,vector<int>> point_time;
+
+    /// This stores the point and the count of the various times it was encountered in the trajectory
+    unordered_map<pair<int,int>,int> point_count;
+
+    // This has been made into a set. We don't care about repetitions as of now. If there are repetitions we handle
+    // it in the unordered map later.
+    const auto target_trajectory = get_target_trajectory_points(target_traj,target_steps,point_count);
 
     while (!open.empty() && closed.count(goal_coordinate)==0)
     {
@@ -318,6 +295,8 @@ static void planner(
 // Try saving the last distance from the goal to the start and use it to compute your look-ahead.
 // See if implicit graphs can make the planner more efficient
 // Now change heuristic and see how code performs
+
+// ###################################################################################################################
 
 // prhs contains input parameters (4):
 // 1st is matrix with all the obstacles
@@ -397,3 +376,10 @@ void mexFunction( int nlhs, mxArray *plhs[],
     // printf("DONE PLANNING!\n");
     return;   
 }
+
+// Do a simple Dijkastra from the start pose to all the positions in the target trajectory. Save the cost to reach that point
+// and time to reach each of these points. Then run a loop to see which all points we can cover in this time.
+// ie. Time for robot to reach that point + current_time + Planning time < Time taken for target to reach that point.
+// Once you identify all these points you can see which has the min g-value.
+// Then you simply backtrack and execute that trajectory. So no future planning is required.
+// Add a const time (say 2s as buffer for search within the array)
