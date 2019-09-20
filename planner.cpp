@@ -84,7 +84,8 @@ public:
 
     void update_fcost()
     {
-        fcost = gcost + hcost;
+        const double epsilon=1;
+        fcost = gcost + (epsilon*hcost);
     }
 
     void update_hcost(pair<int,int> goal_position)
