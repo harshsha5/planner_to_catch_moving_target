@@ -159,15 +159,16 @@ void expand_state(const coordinate &state_to_expand,
     for(size_t dir = 0; dir < NUMOFDIRS; dir++)
     {
         int newx = current_x + 1 + dX[dir];
-        int newy = current_y + 1 + dY[dir];
+        int newy = current_y + 1 + dY[dir];                     //new_x and new_y are 1 indexed
 
         if (newx >= 1 && newx <= x_size && newy >= 1 && newy <= y_size)
         {
             if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
             {
-                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[current_x-1][current_y-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
+                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
                 {
-                    cost_map[newx-1][newy-1].gcost = cost_map[current_x-1][current_y-1].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
+                    /// Note here we checked with closed list and expand only those which haven't been expanded. See if this is in sync with staying stationary.
+                    cost_map[newx-1][newy-1].gcost = cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
                     cost_map[newx-1][newy-1].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
                     open.push(cost_map[newx-1][newy-1]);
                 }
@@ -178,7 +179,7 @@ void expand_state(const coordinate &state_to_expand,
 
 //#######################################################################################################################
 
-pair<int,int> backtrack(vector<vector<coordinate>> &cost_map,
+pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
                         const int* dX,
                         const int* dY,
                         const int &x_size,
@@ -240,7 +241,8 @@ static void planner(
 
     priority_queue<coordinate, vector<coordinate>, Comp> open;
     set<coordinate> closed;
-    vector<vector<coordinate>> cost_map;
+    const coordinate random_init_coordinate(-1,-1,make_pair(targetposeX-1,targetposeY-1));
+    vector<vector<coordinate>> cost_map(x_size,vector<coordinate> (y_size,random_init_coordinate));
     const coordinate goal_coordinate(targetposeX-1,targetposeY-1,make_pair(targetposeX-1,targetposeY-1));
     const coordinate start_coordinate(robotposeX-1,robotposeY-1,make_pair(targetposeX-1,targetposeY-1));
 
@@ -255,6 +257,10 @@ static void planner(
             cost_map[i][j] = coordinate(i,j,make_pair(targetposeX-1,targetposeY-1));
         }
     }
+
+    //Remove || It is just for testing
+    cout<<cost_map[10][10].point.first<<"\t"<<cost_map[10][10].point.second<<"\t"<<cost_map[10][10].gcost<<endl;
+
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
     cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
     cost_map[robotposeX-1][robotposeY-1].update_fcost();
@@ -266,7 +272,7 @@ static void planner(
     cout<<"Goal pose = "<<goal_coordinate.point.first<<","<<goal_coordinate.point.second<<endl;
     cout<<endl<<"======================================================================="<<endl;
 
-    while (!open.empty() || closed.count(goal_coordinate)==0)
+    while (!open.empty() && closed.count(goal_coordinate)==0)
     {
         const auto state_to_expand = open.top();
         open.pop();
@@ -277,8 +283,8 @@ static void planner(
     }
 
     const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
-    robotposeX = best_next_coordinate.first;
-    robotposeY = best_next_coordinate.second;
+    robotposeX = best_next_coordinate.first + 1;
+    robotposeY = best_next_coordinate.second + 1; //These need to be 1 indexed coordinates
     action_ptr[0] = robotposeX;
     action_ptr[1] = robotposeY;
 
