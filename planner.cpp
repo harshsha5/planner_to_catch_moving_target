@@ -131,7 +131,7 @@ bool operator< (const coordinate &c1, const coordinate &c2)
 
 struct Comp{
     bool operator()(const coordinate &a, const coordinate &b){
-        return a.fcost<b.fcost;
+        return a.fcost>b.fcost;
     }
 };
 
@@ -139,6 +139,20 @@ struct Comp{
 //Global Variable declaration
 
 planning_essentials p{3.0,1.0}; /// This is hard-coded as of now. But think over this and alter it according to mean planning time.
+
+//#######################################################################################################################
+
+void debug_result(const coordinate &c,const int &flag)
+{   //flag=1 then that is debugging expanded state.
+    //flag=0 then that is the state we are adding to the open list
+    //flag=-1 then that is the state which is our start state
+    if(flag==0)
+        cout<<"Adding point: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+    else if(flag==-1)
+        cout<<"Start Pose: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+    else
+        cout<<"Expanding State: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+}
 
 //#######################################################################################################################
 
@@ -152,7 +166,7 @@ void expand_state(const coordinate &state_to_expand,
                   const double*	map,
                   const set<coordinate> &closed,
                   const int &collision_thresh)
-{
+{   int a;
     const auto current_x = state_to_expand.point.first;
     const auto current_y = state_to_expand.point.second;        //These are both zero indexed
 
@@ -170,6 +184,7 @@ void expand_state(const coordinate &state_to_expand,
                     /// Note here we checked with closed list and expand only those which haven't been expanded. See if this is in sync with staying stationary.
                     cost_map[newx-1][newy-1].gcost = cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
                     cost_map[newx-1][newy-1].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
+                    //debug_result(cost_map[newx-1][newy-1],0);
                     open.push(cost_map[newx-1][newy-1]);
                 }
             }
@@ -259,7 +274,8 @@ static void planner(
     }
 
     //Remove || It is just for testing
-    cout<<cost_map[10][10].point.first<<"\t"<<cost_map[10][10].point.second<<"\t"<<cost_map[10][10].gcost<<endl;
+    //cout<<"THIS IS IT!"<<endl;
+    //cout<<cost_map[10][10].point.first<<"\t"<<cost_map[10][10].point.second<<"\t"<<cost_map[10][10].gcost<<"\t"<<cost_map[10][10].hcost<<endl;
 
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
     cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
@@ -267,7 +283,8 @@ static void planner(
 
     open.push(cost_map[robotposeX-1][robotposeY-1]);
 
-    cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.second<<endl;
+    //cout<<"Start_pose = "<<open.top().point.first<<","<<open.top().point.second<<endl;
+    debug_result(cost_map[robotposeX-1][robotposeY-1],-1);
     cout<<endl;
     cout<<"Goal pose = "<<goal_coordinate.point.first<<","<<goal_coordinate.point.second<<endl;
     cout<<endl<<"======================================================================="<<endl;
@@ -277,6 +294,7 @@ static void planner(
         const auto state_to_expand = open.top();
         open.pop();
         closed.insert(state_to_expand);
+        //debug_result(state_to_expand,1);
         expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh);
 //        cout<<"Expanded state was: "<<state_to_expand<<endl;
 //        cout<<"======================================================="<<endl;
