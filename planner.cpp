@@ -317,8 +317,8 @@ set<pair<int,int>> get_target_trajectory_and_count(const double* target_traj,
 //#######################################################################################################################
 
 bool are_all_trajectory_points_covered(const set<pair<int,int>> &target_trajectory_points,
-                                       const  const set<coordinate,custom_coord_compare> &closed)
-{
+                                       const set<coordinate,custom_coord_compare> &closed)
+{   // This does have a bug in the sense that if the last n steps are repeated. It will skip those n steps in the second+ iterations and terminate the search early
     for(const auto &point:target_trajectory_points)
     {
         const coordinate coordinate_to_check(point.first,point.second,INT_MAX);
@@ -382,7 +382,7 @@ static void planner(
 
         const auto target_trajectory_points = get_target_trajectory_and_count(target_traj,target_steps,point_count,y_size);
 
-        while (!are_all_trajectory_points_covered(target_trajectory_points,closed))
+        while (!are_all_trajectory_points_covered(target_trajectory_points,closed) && !open.empty())
         {
             const auto state_to_expand = open.top();
 //            cout<<"Probable Expansion "<<endl;
@@ -392,18 +392,18 @@ static void planner(
             if(closed.count(state_to_expand)==0)       //Added this new condition to avoid multiple expansion of the same state
             {
                 closed.insert(state_to_expand);
-//                debug_result(state_to_expand,1);
-//                cout<<"======================================================="<<endl;
+                debug_result(state_to_expand,1);
+                cout<<"======================================================="<<endl;
                 expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,point_time,target_trajectory_points);
 //                print_priority_queue(open);
 //                cout<<"======================================================="<<endl;
             }
-//            else
-//            {cout<<"Not doing shit"<<endl;}
+            else
+            {cout<<"Not doing shit"<<endl;}
 
             open.pop();
         }
-
+        cout<<"Relevant states expanded"<<endl;
         auto stop = std::chrono::high_resolution_clock::now();
         auto time_taken_to_plan = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
         cout<<"Planning time: "<<time_taken_to_plan.count()<<endl;
