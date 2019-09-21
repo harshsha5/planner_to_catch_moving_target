@@ -298,7 +298,7 @@ set<pair<int,int>> get_target_trajectory_and_count(const double* target_traj,
     for (int i=1; i<=target_steps;i++)
     {
         //cout<<(int) target_traj[target_steps-1]<<"\t"<<(int) target_traj[target_steps-1+target_steps]<<endl;
-        auto target_pose = make_pair((int) target_traj[i-1],(int) target_traj[i-1+target_steps]);
+        auto target_pose = make_pair((int) target_traj[i-1] -1,(int) target_traj[i-1+target_steps]-1);
         int curr_x = target_pose.first;
         int curr_y = target_pose.second;
         const auto hashed_coordinate = hash_coordinate(curr_x,curr_y,y_size);
@@ -390,22 +390,13 @@ static void planner(
         while (!are_all_trajectory_points_covered(target_trajectory_points,closed) && !open.empty())
         {
             const auto state_to_expand = open.top();
-//            cout<<"Probable Expansion "<<endl;
-//            debug_result(state_to_expand);
-            //cout<<"=================Printing closed set========================================"<<endl;
-            //print_coordinate_set(closed);
             if(closed.count(state_to_expand)==0)       //Added this new condition to avoid multiple expansion of the same state
             {
                 closed.insert(state_to_expand);
-                debug_result(state_to_expand,1);
-                cout<<"======================================================="<<endl;
-                expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,target_trajectory_points);
-//                print_priority_queue(open);
+//                debug_result(state_to_expand,1);
 //                cout<<"======================================================="<<endl;
+                expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,target_trajectory_points);
             }
-            else
-            {cout<<"Not doing shit"<<endl;}
-
             open.pop();
         }
         cout<<"Relevant states expanded"<<endl;
@@ -417,41 +408,32 @@ static void planner(
         const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
         cout<<"Goal coordinate to target"<<endl;
         debug_result(goal_coordinate);
-        if(point_count.count(hash_coordinate(goal_coordinate.point.first,goal_coordinate.point.first,y_size))!=0)
-            cout<<"Valid goal target"<<endl;
         const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
         cout<<endl<<" ======================================="<<endl;
         auto prev_x = goal_coordinate.point.first;
         auto prev_y = goal_coordinate.point.second;
         for(const auto x:trajectory_obtained)
         {
-//            if(abs(prev_x-x.point.first) > 1 || abs(prev_y-x.point.second) > 1)
-//            {
-//                cout<<"Present coodinate: "<<x.point.first<<"\t"<<x.point.second<<"\n";
-//                cout<<"Past coodinate: "<<prev_x<<"\t"<<prev_y<<"\n";
-//            }
-//            prev_x = x.point.first;
-//            prev_y = x.point.second;
             best_trajectory.push_back(x);
         }
         std::reverse(best_trajectory.begin(),best_trajectory.end());
     }
 
     const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
-    cout<<"Start coordinate is "<<endl;
-    debug_result(start_coordinate);
+//    cout<<"Start coordinate is "<<endl;
+//    debug_result(start_coordinate);
 
     if(global_counter+1<best_trajectory.size())
     {
-        cout<<"Taking next action as: "<<endl;
-        debug_result(best_trajectory[global_counter+1]);
+//        cout<<"Taking next action as: "<<endl;
+//        debug_result(best_trajectory[global_counter+1]);
         action_ptr[0] = best_trajectory[global_counter+1].point.first + 1;
         action_ptr[1] = best_trajectory[global_counter+1].point.second + 1;
     }
     else
     {
-        cout<<"Taking next action as: "<<endl;
-        debug_result(best_trajectory[best_trajectory.size()-1]);
+//        cout<<"Taking next action as: "<<endl;
+//        debug_result(best_trajectory[best_trajectory.size()-1]);
         action_ptr[0] = best_trajectory[best_trajectory.size()-1].point.first + 1;
         action_ptr[1] = best_trajectory[best_trajectory.size()-1].point.second + 1;
     }
