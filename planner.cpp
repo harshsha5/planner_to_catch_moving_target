@@ -40,6 +40,10 @@ using namespace std;
 
 #define NUMOFDIRS 9
 
+//My own defines
+
+#define HASH_POINT(X, Y, N_COL) ((X)*N_COL + Y)
+#define UNHASH_POINT()
 //#######################################################################################################################
 
 struct coordinate
@@ -58,7 +62,7 @@ public:
 
     void update_fcost()
     {
-        const double epsilon=1;
+        const double epsilon=0; //Dijkastra
         fcost = gcost + (epsilon*hcost);
     }
 
@@ -106,17 +110,17 @@ struct Comp{
 
 //#######################################################################################################################
 
-void debug_result(const coordinate &c,const int &flag)
-{   //flag=1 then that is debugging expanded state.
-    //flag=0 then that is the state we are adding to the open list
-    //flag=-1 then that is the state which is our start state
-    if(flag==0)
-        cout<<"Adding point: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-    else if(flag==-1)
-        cout<<"Start Pose: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-    else
-        cout<<"Expanding State: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-}
+//void debug_result(const coordinate &c,const int &flag)
+//{   //flag=1 then that is debugging expanded state.
+//    //flag=0 then that is the state we are adding to the open list
+//    //flag=-1 then that is the state which is our start state
+//    if(flag==0)
+//        cout<<"Adding point: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+//    else if(flag==-1)
+//        cout<<"Start Pose: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+//    else
+//        cout<<"Expanding State: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
+//}
 
 //#######################################################################################################################
 
@@ -129,7 +133,9 @@ void expand_state(const coordinate &state_to_expand,
                   const int &y_size,
                   const double*	map,
                   const set<coordinate> &closed,
-                  const int &collision_thresh)
+                  const int &collision_thresh,
+                  const int &curr_time,
+                  unordered_map<int,vector<int>> point_time)
 {   int a;
     const auto current_x = state_to_expand.point.first;
     const auto current_y = state_to_expand.point.second;        //These are both zero indexed
@@ -158,64 +164,90 @@ void expand_state(const coordinate &state_to_expand,
 
 //#######################################################################################################################
 
-pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
-                        const int* dX,
-                        const int* dY,
-                        const int &x_size,
-                        const int &y_size,
-                        const coordinate &goal_coordinate,
-                        const coordinate &start_coordinate)
+//pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
+//                        const int* dX,
+//                        const int* dY,
+//                        const int &x_size,
+//                        const int &y_size,
+//                        const coordinate &goal_coordinate,
+//                        const coordinate &start_coordinate)
+//{
+//    vector<coordinate> stack;
+//    stack.push_back(goal_coordinate);
+//    auto curr_coordinate = goal_coordinate;
+//    while(curr_coordinate!=start_coordinate)
+//    {
+//        double g_min=INT_MAX;
+//        int bestx = -1;
+//        int besty = -1;
+//        for(size_t dir = 0; dir < NUMOFDIRS; dir++)
+//        {
+//            int newx = curr_coordinate.point.first + dX[dir];
+//            int newy = curr_coordinate.point.second + dY[dir];
+//            // newx and newy are 0 indexed since goal and start coords are zero indexed in the planner function
+//            if (newx >= 0 && newx < x_size && newy >= 0 && newy < y_size)
+//            {
+//                if(cost_map[newx][newy].gcost<g_min)
+//                {
+//                    g_min = cost_map[newx][newy].gcost;
+//                    bestx = newx;
+//                    besty = newy;
+//                }
+//            }
+//        }
+//        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
+//        stack.push_back(curr_coordinate);
+//    }
+//
+//    return stack[stack.size()-2].point; //Last point is start, I need to return the point before that
+//
+//}
+
+//#######################################################################################################################
+
+int hash_coordinate(const int &x,
+                    const int &y,
+                    const int &n_col)
 {
-    vector<coordinate> stack;
-    stack.push_back(goal_coordinate);
-    auto curr_coordinate = goal_coordinate;
-    while(curr_coordinate!=start_coordinate)
-    {
-        double g_min=INT_MAX;
-        int bestx = -1;
-        int besty = -1;
-        for(size_t dir = 0; dir < NUMOFDIRS; dir++)
-        {
-            int newx = curr_coordinate.point.first + dX[dir];
-            int newy = curr_coordinate.point.second + dY[dir];
-            // newx and newy are 0 indexed since goal and start coords are zero indexed in the planner function
-            if (newx >= 0 && newx < x_size && newy >= 0 && newy < y_size)
-            {
-                if(cost_map[newx][newy].gcost<g_min)
-                {
-                    g_min = cost_map[newx][newy].gcost;
-                    bestx = newx;
-                    besty = newy;
-                }
-            }
-        }
-        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
-        stack.push_back(curr_coordinate);
-    }
-
-    return stack[stack.size()-2].point; //Last point is start, I need to return the point before that
-
+    return x*n_col + y;
 }
 
 //#######################################################################################################################
 
-set<pair<int,int> get_target_trajectory_points(const double* target_traj,
-                                               const int &target_step,
-                                               unordered_map<pair<int,int>,int> point_count)
+pair<int,int> unhash_coordinate(const int &hash,
+                    const int &n_col)
+{
+    return make_pair((int)(hash/n_col),(int)(hash%n_col));
+}
+
+//#######################################################################################################################
+
+set<pair<int,int>> get_target_trajectory_and_count(const double* target_traj,
+                                               const int &target_steps,
+                                               unordered_map<int,int> &point_count,
+                                               const int &y_size)
 {   /// This extracts all the target poses from the given target trajectory
     /// Adds the unique ones in the set
     /// But keeps track of duplication in the unordered_map
-    set<pair<int,int> target_trajectory_set;
+    set<pair<int,int>> target_trajectory_set;
     for (size_t i=1; i<=target_steps;i++)
     {
-        target_trajectory_set.insert(make_pair((int) target_traj[target_steps-1],(int) target_traj[target_steps-1+target_steps]));
-    };
+        //cout<<(int) target_traj[target_steps-1]<<"\t"<<(int) target_traj[target_steps-1+target_steps]<<endl;
+        auto target_pose = make_pair((int) target_traj[i-1],(int) target_traj[i-1+target_steps]);
+        int curr_x = target_pose.first;
+        int curr_y = target_pose.second;
+        const auto hashed_coordinate = hash_coordinate(curr_x,curr_y,y_size);
 
+        if(point_count.count(hashed_coordinate)==0)
+            point_count[hashed_coordinate] = 1;
+        else
+            point_count[hashed_coordinate]++;
+
+        target_trajectory_set.insert(target_pose);
+    };
     return std::move(target_trajectory_set);
 }
 
-unordered_map<pair<int,int>,int> get_point_count_map(unordered_map<pair<int,int>,int> point_count,
-                                                        )
 //#######################################################################################################################
 
 static void planner(
@@ -248,24 +280,30 @@ static void planner(
     {
         for(size_t j=0;j<y_size;j++)
         {
-            cost_map[i][j] = coordinate(i,j,INT_MAX));
+            cost_map[i][j] = coordinate(i,j,INT_MAX);
         }
     }
 
     /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
+    cost_map[robotposeX-1][robotposeY-1].time_to_reach = curr_time;
     cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
     cost_map[robotposeX-1][robotposeY-1].update_fcost();
     open.push(cost_map[robotposeX-1][robotposeY-1]);
 
     /// This stores the point and the various times to reach those points
-    unordered_map<pair<int,int>,vector<int>> point_time;
+    unordered_map<int,vector<int>> point_time;      //This is only for target_points
 
     /// This stores the point and the count of the various times it was encountered in the trajectory
-    unordered_map<pair<int,int>,int> point_count;
+    unordered_map<int,int> point_count;             //This is only for target_points
 
-    // This has been made into a set. We don't care about repetitions as of now. If there are repetitions we handle
-    // it in the unordered map later.
-    const auto target_trajectory = get_target_trajectory_points(target_traj,target_steps,point_count);
+    const auto target_trajectory = get_target_trajectory_and_count(target_traj,target_steps,point_count,y_size);
+
+//    for (auto point : point_count)
+//    {
+//        const auto curr_coord = unhash_coordinate(point.first,y_size);
+//        cout << curr_coord.first<<"\t" << curr_coord.second<<"\t " << point.second << endl;
+//    }
+//    cout<<"====================================================================== \n";
 
     while (!open.empty() && closed.count(goal_coordinate)==0)
     {
@@ -273,14 +311,14 @@ static void planner(
         open.pop();
         closed.insert(state_to_expand);
         //debug_result(state_to_expand,1);
-        expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh);
+        expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,curr_time,point_time);
 //        cout<<"Expanded state was: "<<state_to_expand<<endl;
 //        cout<<"======================================================="<<endl;
     }
 
-    const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
-    robotposeX = best_next_coordinate.first + 1;
-    robotposeY = best_next_coordinate.second + 1; //These need to be 1 indexed coordinates
+//    const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+//    robotposeX = best_next_coordinate.first + 1;
+//    robotposeY = best_next_coordinate.second + 1; //These need to be 1 indexed coordinates
     action_ptr[0] = robotposeX;
     action_ptr[1] = robotposeY;
 
