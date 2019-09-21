@@ -41,10 +41,6 @@ using namespace std;
 
 #define NUMOFDIRS 9
 
-//My own defines
-
-#define HASH_POINT(X, Y, N_COL) ((X)*N_COL + Y)
-#define UNHASH_POINT()
 //#######################################################################################################################
 
 struct coordinate
@@ -180,7 +176,10 @@ void expand_state(const coordinate &state_to_expand,
                     if(target_trajectory_points.count(make_pair(newx-1,newy-1))!=0)
                     {
                         const auto hash_new_coordinate = hash_coordinate(newx-1,newy-1,y_size);
-                        point_time[hash_new_coordinate].emplace_back(cost_map[newx-1][newy-1].time_to_reach);
+                        if(point_time.count(hash_new_coordinate)!=0)
+                            point_time[hash_new_coordinate].emplace_back(cost_map[newx-1][newy-1].time_to_reach);
+                        else
+                            point_time[hash_new_coordinate] = vector<int> {cost_map[newx-1][newy-1].time_to_reach};
                     }
                     //debug_result(cost_map[newx-1][newy-1],0);
                 }
@@ -205,11 +204,13 @@ pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
         const auto curr_point = unhash_coordinate(q.first,y_size);
         /// The below if condition needs to be altered to take into account all times in point_time.
         const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q.first][point_time[q.first].size()-1];
-        if(time_diff<0 && ( (time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]) + cost_map[curr_point.first][curr_point.second].gcost)<least_g_cost)
+        const double cost_to_reach_and_wait = cost_map[curr_point.first][curr_point.second].gcost + (-1*time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]);
+        if(time_diff<0 && cost_to_reach_and_wait<least_g_cost)
         {
-            least_g_cost = cost_map[curr_point.first][curr_point.second].gcost;
+            least_g_cost = cost_to_reach_and_wait;
             best_coordinate = curr_point;
         }
+
     }
 
     return best_coordinate;
@@ -354,9 +355,13 @@ static void planner(
         const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
         const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
         ///Incorrect correct vector intialization part
-        best_trajectory = trajectory_obtained;
-//        best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
-//        best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+        for(const auto x:trajectory_obtained)
+        {
+            //cout<<x.point.first<<"\t"<<x.point.second<<"\n";
+            best_trajectory.push_back(x);
+        }
+//      best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
+//      best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
     }
 
     if(!(best_trajectory.size()-2-curr_time<0))
