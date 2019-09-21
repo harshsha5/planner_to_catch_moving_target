@@ -196,14 +196,15 @@ pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
                                    const vector<vector<coordinate>> &cost_map,
                                    const int &time_taken_to_plan,
                                    const int &x_size,
-                                   const int &y_size)
+                                   const int &y_size,
+                                   const double* map)
 {   pair<int,int> best_coordinate;
     double least_g_cost = INT_MAX;
     for(auto q:point_count)
     {
         const auto curr_point = unhash_coordinate(q.first,y_size);
         /// The below if condition needs to be altered to take into account all times in point_time.
-        const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q][point_time[q].size()-1]
+        const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q.first][point_time[q.first].size()-1];
         if(time_diff<0 && ( (time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]) + cost_map[curr_point.first][curr_point.second].gcost)<least_g_cost)
         {
             least_g_cost = cost_map[curr_point.first][curr_point.second].gcost;
@@ -216,7 +217,7 @@ pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
 
 //#######################################################################################################################
 
-pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
+vector<coordinate> backtrack(const vector<vector<coordinate>> &cost_map,
                         const int* dX,
                         const int* dY,
                         const int &x_size,
@@ -247,12 +248,11 @@ pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
                 }
             }
         }
-        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
+        curr_coordinate = coordinate(bestx,besty,INT_MAX);
         stack.push_back(curr_coordinate);
     }
 
-    return stack;
-
+    return std::move(stack);
 }
 
 //#######################################################################################################################
@@ -350,18 +350,26 @@ static void planner(
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto time_taken_to_plan = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
-        const auto goal_coordinate = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size);
-
-        best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+        const auto goal_point = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size,map);
+        const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
+        const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+        ///Incorrect correct vector intialization part
+        best_trajectory = trajectory_obtained;
+//        best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
+//        best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
     }
 
     if(!(best_trajectory.size()-2-curr_time<0))
-        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].first;
-        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].second;
+    {
+        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].point.first;
+        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].point.second;
+    }
     else
-        action_ptr[0] = best_trajectory[0].first;
-        action_ptr[1] = best_trajectory[0].second;
-        
+    {
+        action_ptr[0] = best_trajectory[0].point.first;
+        action_ptr[1] = best_trajectory[0].point.second;
+    }
+
     return;
 }
 
