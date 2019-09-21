@@ -93,12 +93,19 @@ bool operator!= (const coordinate &c1, const coordinate &c2)
 
 bool operator< (const coordinate &c1, const coordinate &c2)
 {
-    return c1.fcost < c2.fcost;
+    return c1.gcost < c2.gcost;
 }
 
 struct Comp{
     bool operator()(const coordinate &a, const coordinate &b){
-        return a.fcost>b.fcost;
+        return a.gcost>b.gcost;
+    }
+};
+
+struct custom_coord_compare{
+    bool operator()(const coordinate &c1, const coordinate &c2) const{
+        return !(c1.point.first== c2.point.first &&
+                c1.point.second== c2.point.second);
     }
 };
 
@@ -109,17 +116,41 @@ vector<coordinate> best_trajectory;
 
 //#######################################################################################################################
 
-//void debug_result(const coordinate &c,const int &flag)
-//{   //flag=1 then that is debugging expanded state.
-//    //flag=0 then that is the state we are adding to the open list
-//    //flag=-1 then that is the state which is our start state
-//    if(flag==0)
-//        cout<<"Adding point: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-//    else if(flag==-1)
-//        cout<<"Start Pose: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-//    else
-//        cout<<"Expanding State: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.hcost<<endl;
-//}
+void debug_result(const coordinate &c,const int &flag = 100)
+{   //flag=1 then that is debugging expanded state.
+    //flag=0 then that is the state we are adding to the open list
+    //flag=-1 then that is the state which is our start state
+    if(flag==0)
+        cout<<"Adding point: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.time_to_reach<<endl;
+    else if(flag==-1)
+        cout<<"Start Pose: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.time_to_reach<<endl;
+    else if(flag==1)
+        cout<<"Expanding State: "<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.time_to_reach<<endl;
+    else
+        cout<<c.point.first<<"\t"<<c.point.second<<"\t"<<c.gcost<<"\t"<<c.time_to_reach<<endl;
+}
+
+//#######################################################################################################################
+
+void print_priority_queue(priority_queue<coordinate, vector<coordinate>, Comp> pq)
+{
+    while (!pq.empty())
+    {
+        debug_result(pq.top(),0);
+        pq.pop();
+    }
+}
+
+//#######################################################################################################################
+
+void print_coordinate_set(set<coordinate> seto)
+{
+    set <coordinate> :: iterator itr;
+    for (itr = seto.begin(); itr != seto.end(); ++itr)
+    {
+        debug_result(*itr);
+    }
+}
 
 //#######################################################################################################################
 
@@ -148,9 +179,8 @@ void expand_state(const coordinate &state_to_expand,
                   const int &x_size,
                   const int &y_size,
                   const double*	map,
-                  const set<coordinate> &closed,
+                  const set<coordinate,custom_coord_compare> &closed,
                   const int &collision_thresh,
-                  const int &curr_time,
                   unordered_map<int,vector<int>> &point_time,
                   const set<pair<int,int>> &target_trajectory_points)
 {
@@ -166,12 +196,12 @@ void expand_state(const coordinate &state_to_expand,
         {
             if (((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] >= 0) && ((int)map[GETMAPINDEX(newx,newy,x_size,y_size)] < collision_thresh))  //if free
             {
-                if(closed.count(cost_map[newx-1][newy-1])==0 && cost_map[newx-1][newy-1].gcost > cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)])
+                if(closed.count(cost_map[newx-1][newy-1])==0 && (cost_map[newx-1][newy-1].gcost > cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)]))
                 {
                     /// Note here we checked with closed list and expand only those which haven't been expanded. See if this is in sync with staying stationary.
                     cost_map[newx-1][newy-1].gcost = cost_map[current_x][current_y].gcost + (int)map[GETMAPINDEX(newx,newy,x_size,y_size)];
                     cost_map[newx-1][newy-1].update_fcost();    //Don't forget this-> because everytime g/h changes f changes
-                    cost_map[newx-1][newy-1].time_to_reach = curr_time + 1;
+                    cost_map[newx-1][newy-1].time_to_reach = cost_map[current_x][current_y].time_to_reach + 1;
                     open.push(cost_map[newx-1][newy-1]);
                     if(target_trajectory_points.count(make_pair(newx-1,newy-1))!=0)
                     {
@@ -286,6 +316,20 @@ set<pair<int,int>> get_target_trajectory_and_count(const double* target_traj,
 
 //#######################################################################################################################
 
+bool are_all_trajectory_points_covered(const set<pair<int,int>> &target_trajectory_points,
+                                       const  const set<coordinate,custom_coord_compare> &closed)
+{
+    for(const auto &point:target_trajectory_points)
+    {
+        const coordinate coordinate_to_check(point.first,point.second,INT_MAX);
+        if(closed.count(coordinate_to_check)==0)
+            return false;
+    }
+    return true;
+}
+
+//#######################################################################################################################
+
 static void planner(
         double*	map,
         int collision_thresh,
@@ -310,7 +354,7 @@ static void planner(
         int dY[NUMOFDIRS] = {-1,  0,  1, -1,  1, -1, 0, 1, 0};
 
         priority_queue<coordinate, vector<coordinate>, Comp> open;
-        set<coordinate> closed;
+        set<coordinate,custom_coord_compare> closed;
         const coordinate random_init_coordinate(-1,-1,INT_MAX);
         vector<vector<coordinate>> cost_map(x_size,vector<coordinate> (y_size,random_init_coordinate));
         const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
@@ -338,42 +382,58 @@ static void planner(
 
         const auto target_trajectory_points = get_target_trajectory_and_count(target_traj,target_steps,point_count,y_size);
 
-        while (!open.empty())
+        while (!are_all_trajectory_points_covered(target_trajectory_points,closed))
         {
             const auto state_to_expand = open.top();
+//            cout<<"Probable Expansion "<<endl;
+//            debug_result(state_to_expand);
+            //cout<<"=================Printing closed set========================================"<<endl;
+            //print_coordinate_set(closed);
+            if(closed.count(state_to_expand)==0)       //Added this new condition to avoid multiple expansion of the same state
+            {
+                closed.insert(state_to_expand);
+//                debug_result(state_to_expand,1);
+//                cout<<"======================================================="<<endl;
+                expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,point_time,target_trajectory_points);
+//                print_priority_queue(open);
+//                cout<<"======================================================="<<endl;
+            }
+//            else
+//            {cout<<"Not doing shit"<<endl;}
+
             open.pop();
-            closed.insert(state_to_expand);
-            //debug_result(state_to_expand,1);
-            expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,curr_time,point_time,target_trajectory_points);
-//        cout<<"Expanded state was: "<<state_to_expand<<endl;
-//        cout<<"======================================================="<<endl;
         }
 
         auto stop = std::chrono::high_resolution_clock::now();
         auto time_taken_to_plan = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
-        const auto goal_point = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size,map);
-        const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
-        const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
-        ///Incorrect correct vector intialization part
-        for(const auto x:trajectory_obtained)
-        {
-            //cout<<x.point.first<<"\t"<<x.point.second<<"\n";
-            best_trajectory.push_back(x);
-        }
-//      best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
-//      best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+        cout<<"Planning time: "<<time_taken_to_plan.count()<<endl;
+//        const auto goal_point = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size,map);
+//        const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
+//        const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+//        cout<<trajectory_obtained.size()<<" ======================================="<<endl;
+//        ///Incorrect correct vector intialization part
+//        for(const auto x:trajectory_obtained)
+//        {
+//            cout<<x.point.first<<"\t"<<x.point.second<<"\n";
+//            best_trajectory.push_back(x);
+//        }
+////      best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
+////      best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
     }
+//
+//    if(!(best_trajectory.size()-2-curr_time<0))
+//    {
+//        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].point.first;
+//        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].point.second;
+//    }
+//    else
+//    {
+//        action_ptr[0] = best_trajectory[0].point.first;
+//        action_ptr[1] = best_trajectory[0].point.second;
+//    }
 
-    if(!(best_trajectory.size()-2-curr_time<0))
-    {
-        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].point.first;
-        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].point.second;
-    }
-    else
-    {
-        action_ptr[0] = best_trajectory[0].point.first;
-        action_ptr[1] = best_trajectory[0].point.second;
-    }
+    action_ptr[0] = robotposeX;
+    action_ptr[1] = robotposeY;
 
     return;
 }
