@@ -113,6 +113,7 @@ struct custom_coord_compare{
 //Global Variable declaration
 
 vector<coordinate> best_trajectory;
+int global_counter=0;
 
 //#######################################################################################################################
 
@@ -419,29 +420,42 @@ static void planner(
         if(point_count.count(hash_coordinate(goal_coordinate.point.first,goal_coordinate.point.first,y_size))!=0)
             cout<<"Valid goal target"<<endl;
         const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
-        cout<<trajectory_obtained.size()<<" ======================================="<<endl;
+        cout<<endl<<" ======================================="<<endl;
+        auto prev_x = goal_coordinate.point.first;
+        auto prev_y = goal_coordinate.point.second;
         for(const auto x:trajectory_obtained)
         {
-            //cout<<x.point.first<<"\t"<<x.point.second<<"\n";
+//            if(abs(prev_x-x.point.first) > 1 || abs(prev_y-x.point.second) > 1)
+//            {
+//                cout<<"Present coodinate: "<<x.point.first<<"\t"<<x.point.second<<"\n";
+//                cout<<"Past coodinate: "<<prev_x<<"\t"<<prev_y<<"\n";
+//            }
+//            prev_x = x.point.first;
+//            prev_y = x.point.second;
             best_trajectory.push_back(x);
         }
-////      best_trajectory = vector<coordinate> (trajectory_obtained.size(),random_init_coordinate)
-////      best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
+        std::reverse(best_trajectory.begin(),best_trajectory.end());
     }
 
-    if(!(best_trajectory.size()-2-curr_time<0))
+    const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
+    cout<<"Start coordinate is "<<endl;
+    debug_result(start_coordinate);
+
+    if(global_counter+1<best_trajectory.size())
     {
-        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].point.first;
-        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].point.second;
+        cout<<"Taking next action as: "<<endl;
+        debug_result(best_trajectory[global_counter+1]);
+        action_ptr[0] = best_trajectory[global_counter+1].point.first + 1;
+        action_ptr[1] = best_trajectory[global_counter+1].point.second + 1;
     }
     else
     {
-        action_ptr[0] = best_trajectory[0].point.first;
-        action_ptr[1] = best_trajectory[0].point.second;
+        cout<<"Taking next action as: "<<endl;
+        debug_result(best_trajectory[best_trajectory.size()-1]);
+        action_ptr[0] = best_trajectory[best_trajectory.size()-1].point.first + 1;
+        action_ptr[1] = best_trajectory[best_trajectory.size()-1].point.second + 1;
     }
-//
-//    action_ptr[0] = robotposeX;
-//    action_ptr[1] = robotposeY;
+    ++global_counter;
 
     return;
 }
