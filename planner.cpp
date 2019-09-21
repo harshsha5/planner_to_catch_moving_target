@@ -233,7 +233,15 @@ pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
     {
         const auto curr_point = unhash_coordinate(q.first,y_size);
         /// The below if condition needs to be altered to take into account all times in point_time.
+        if(point_time[q.first].size()<=0)
+        {
+            continue;
+        }
+        cout<<"Time to reach the point by our robot: "<<cost_map[curr_point.first][curr_point.second].time_to_reach<<endl;
+        cout<<"Time taken by the target to reach that point"<<point_time[q.first][point_time[q.first].size()-1]<<endl;
         const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q.first][point_time[q.first].size()-1];
+        cout<<"time_diff = "<<time_diff<<endl;
+        cout<<"==================================================="<<endl;
         const double cost_to_reach_and_wait = cost_map[curr_point.first][curr_point.second].gcost + (-1*time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]);
         if(time_diff<0 && cost_to_reach_and_wait<least_g_cost)
         {
@@ -407,8 +415,13 @@ static void planner(
         auto stop = std::chrono::high_resolution_clock::now();
         auto time_taken_to_plan = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
         cout<<"Planning time: "<<time_taken_to_plan.count()<<endl;
-//        const auto goal_point = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size,map);
-//        const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
+
+        const auto goal_point = find_least_cost_path(point_count,std::move(point_time),cost_map,(int)time_taken_to_plan.count()+1,x_size,y_size,map);
+        const coordinate goal_coordinate(goal_point.first,goal_point.second,INT_MAX);
+        cout<<"Goal coordinate to target"<<endl;
+        debug_result(goal_coordinate);
+        if(point_count.count(hash_coordinate(goal_coordinate.point.first,goal_coordinate.point.first,y_size))!=0)
+            cout<<"Valid goal target"<<endl;
 //        const auto trajectory_obtained = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
 //        cout<<trajectory_obtained.size()<<" ======================================="<<endl;
 //        ///Incorrect correct vector intialization part
