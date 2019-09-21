@@ -55,7 +55,6 @@ public:
     friend bool operator== (const coordinate &c1, const coordinate &c2);
     friend bool operator!= (const coordinate &c1, const coordinate &c2);
     friend bool operator< (const coordinate &c1, const coordinate &c2);
-//    friend ostream& operator << (ostream &out, const coordinate &c);
 
     void update_fcost()
     {
@@ -65,8 +64,6 @@ public:
 
     void update_hcost()
     {
-        /// This is the present heuristic (Euclidian for now)
-        //hcost = (double)sqrt(((point.first-goal_position.first)*(point.first-goal_position.first) + (point.second-goal_position.second)*(point.second-goal_position.second)));
         hcost = 0; //Let's do Dijkastra first.
     }
 
@@ -228,11 +225,7 @@ pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
         {
             continue;
         }
-//        cout<<"Time to reach the point by our robot: "<<cost_map[curr_point.first][curr_point.second].time_to_reach<<endl;
-//        cout<<"Time taken by the target to reach that point"<<point_time[q.first][point_time[q.first].size()-1]<<endl;
         const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q.first][point_time[q.first].size()-1];
-//        cout<<"time_diff = "<<time_diff<<endl;
-//        cout<<"==================================================="<<endl;
         const double cost_to_reach_and_wait = cost_map[curr_point.first][curr_point.second].gcost + (-1*time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]);
         if(time_diff<0 && cost_to_reach_and_wait<least_g_cost)
         {
@@ -297,7 +290,6 @@ set<pair<int,int>> get_target_trajectory_and_count(const double* target_traj,
     set<pair<int,int>> target_trajectory_set;
     for (int i=1; i<=target_steps;i++)
     {
-        //cout<<(int) target_traj[target_steps-1]<<"\t"<<(int) target_traj[target_steps-1+target_steps]<<endl;
         auto target_pose = make_pair((int) target_traj[i-1] -1,(int) target_traj[i-1+target_steps]-1);
         int curr_x = target_pose.first;
         int curr_y = target_pose.second;
@@ -419,21 +411,13 @@ static void planner(
         std::reverse(best_trajectory.begin(),best_trajectory.end());
     }
 
-    const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
-//    cout<<"Start coordinate is "<<endl;
-//    debug_result(start_coordinate);
-
     if(global_counter+1<best_trajectory.size())
     {
-//        cout<<"Taking next action as: "<<endl;
-//        debug_result(best_trajectory[global_counter+1]);
         action_ptr[0] = best_trajectory[global_counter+1].point.first + 1;
         action_ptr[1] = best_trajectory[global_counter+1].point.second + 1;
     }
     else
     {
-//        cout<<"Taking next action as: "<<endl;
-//        debug_result(best_trajectory[best_trajectory.size()-1]);
         action_ptr[0] = best_trajectory[best_trajectory.size()-1].point.first + 1;
         action_ptr[1] = best_trajectory[best_trajectory.size()-1].point.second + 1;
     }
@@ -441,15 +425,6 @@ static void planner(
 
     return;
 }
-
-// ###################################################################################################################
-
-// Ideas for the planner
-// First simply code an A* with Euclidian heuristic and see how it performs.
-// You can then try the same with the look-ahead method
-// Try saving the last distance from the goal to the start and use it to compute your look-ahead.
-// See if implicit graphs can make the planner more efficient
-// Now change heuristic and see how code performs
 
 // ###################################################################################################################
 
@@ -531,10 +506,3 @@ void mexFunction( int nlhs, mxArray *plhs[],
     // printf("DONE PLANNING!\n");
     return;   
 }
-
-// Do a simple Dijkastra from the start pose to all the positions in the target trajectory. Save the cost to reach that point
-// and time to reach each of these points. Then run a loop to see which all points we can cover in this time.
-// ie. Time for robot to reach that point + current_time + Planning time < Time taken for target to reach that point.
-// Once you identify all these points you can see which has the min g-value.
-// Then you simply backtrack and execute that trajectory. So no future planning is required.
-// Add a const time (say 2s as buffer for search within the array)
