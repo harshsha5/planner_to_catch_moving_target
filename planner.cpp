@@ -11,6 +11,7 @@
 #include <set>
 #include <climits>
 #include <unordered_map>
+#include <chrono>
 
 using namespace std;
 
@@ -108,6 +109,8 @@ struct Comp{
 //#######################################################################################################################
 //Global Variable declaration
 
+vector<coordinate> best_trajectory;
+
 //#######################################################################################################################
 
 //void debug_result(const coordinate &c,const int &flag)
@@ -188,44 +191,69 @@ void expand_state(const coordinate &state_to_expand,
 
 //#######################################################################################################################
 
-//pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
-//                        const int* dX,
-//                        const int* dY,
-//                        const int &x_size,
-//                        const int &y_size,
-//                        const coordinate &goal_coordinate,
-//                        const coordinate &start_coordinate)
-//{
-//    vector<coordinate> stack;
-//    stack.push_back(goal_coordinate);
-//    auto curr_coordinate = goal_coordinate;
-//    while(curr_coordinate!=start_coordinate)
-//    {
-//        double g_min=INT_MAX;
-//        int bestx = -1;
-//        int besty = -1;
-//        for(size_t dir = 0; dir < NUMOFDIRS; dir++)
-//        {
-//            int newx = curr_coordinate.point.first + dX[dir];
-//            int newy = curr_coordinate.point.second + dY[dir];
-//            // newx and newy are 0 indexed since goal and start coords are zero indexed in the planner function
-//            if (newx >= 0 && newx < x_size && newy >= 0 && newy < y_size)
-//            {
-//                if(cost_map[newx][newy].gcost<g_min)
-//                {
-//                    g_min = cost_map[newx][newy].gcost;
-//                    bestx = newx;
-//                    besty = newy;
-//                }
-//            }
-//        }
-//        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
-//        stack.push_back(curr_coordinate);
-//    }
-//
-//    return stack[stack.size()-2].point; //Last point is start, I need to return the point before that
-//
-//}
+pair<int,int> find_least_cost_path(unordered_map<int,int> point_count,
+                                   unordered_map<int,vector<int>> point_time,
+                                   const vector<vector<coordinate>> &cost_map,
+                                   const int &time_taken_to_plan,
+                                   const int &x_size,
+                                   const int &y_size)
+{   pair<int,int> best_coordinate;
+    double least_g_cost = INT_MAX;
+    for(auto q:point_count)
+    {
+        const auto curr_point = unhash_coordinate(q.first,y_size);
+        /// The below if condition needs to be altered to take into account all times in point_time.
+        const auto time_diff = time_taken_to_plan+cost_map[curr_point.first][curr_point.second].time_to_reach - point_time[q][point_time[q].size()-1]
+        if(time_diff<0 && ( (time_diff*(int)map[GETMAPINDEX(curr_point.first+1,curr_point.second+1,x_size,y_size)]) + cost_map[curr_point.first][curr_point.second].gcost)<least_g_cost)
+        {
+            least_g_cost = cost_map[curr_point.first][curr_point.second].gcost;
+            best_coordinate = curr_point;
+        }
+    }
+
+    return best_coordinate;
+}
+
+//#######################################################################################################################
+
+pair<int,int> backtrack(const vector<vector<coordinate>> &cost_map,
+                        const int* dX,
+                        const int* dY,
+                        const int &x_size,
+                        const int &y_size,
+                        const coordinate &goal_coordinate,
+                        const coordinate &start_coordinate)
+{
+    vector<coordinate> stack;
+    stack.push_back(goal_coordinate);
+    auto curr_coordinate = goal_coordinate;
+    while(curr_coordinate!=start_coordinate)
+    {
+        double g_min=INT_MAX;
+        int bestx = -1;
+        int besty = -1;
+        for(size_t dir = 0; dir < NUMOFDIRS; dir++)
+        {
+            int newx = curr_coordinate.point.first + dX[dir];
+            int newy = curr_coordinate.point.second + dY[dir];
+            // newx and newy are 0 indexed since goal and start coords are zero indexed in the planner function
+            if (newx >= 0 && newx < x_size && newy >= 0 && newy < y_size)
+            {
+                if(cost_map[newx][newy].gcost<g_min)
+                {
+                    g_min = cost_map[newx][newy].gcost;
+                    bestx = newx;
+                    besty = newy;
+                }
+            }
+        }
+        curr_coordinate = coordinate(bestx,besty,goal_coordinate.point);
+        stack.push_back(curr_coordinate);
+    }
+
+    return stack;
+
+}
 
 //#######################################################################################################################
 
@@ -272,58 +300,68 @@ static void planner(
         double* action_ptr
         )
 {
-    // 9-connected grid
-    int dX[NUMOFDIRS] = {-1, -1, -1,  0,  0,  1, 1, 1, 0};
-    int dY[NUMOFDIRS] = {-1,  0,  1, -1,  1, -1, 0, 1, 0};
-
-    priority_queue<coordinate, vector<coordinate>, Comp> open;
-    set<coordinate> closed;
-    const coordinate random_init_coordinate(-1,-1,INT_MAX);
-    vector<vector<coordinate>> cost_map(x_size,vector<coordinate> (y_size,random_init_coordinate));
-    const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
-
-    //CREATE COST_MAP
-    for(size_t i=0;i<x_size;i++)
+    if(curr_time==0)
     {
-        for(size_t j=0;j<y_size;j++)
+        auto start = std::chrono::high_resolution_clock::now();
+
+        // 9-connected grid
+        int dX[NUMOFDIRS] = {-1, -1, -1,  0,  0,  1, 1, 1, 0};
+        int dY[NUMOFDIRS] = {-1,  0,  1, -1,  1, -1, 0, 1, 0};
+
+        priority_queue<coordinate, vector<coordinate>, Comp> open;
+        set<coordinate> closed;
+        const coordinate random_init_coordinate(-1,-1,INT_MAX);
+        vector<vector<coordinate>> cost_map(x_size,vector<coordinate> (y_size,random_init_coordinate));
+        const coordinate start_coordinate(robotposeX-1,robotposeY-1,curr_time);
+
+        //CREATE COST_MAP
+        for(size_t i=0;i<x_size;i++)
         {
-            cost_map[i][j] = coordinate(i,j,INT_MAX);
+            for(size_t j=0;j<y_size;j++)
+            {
+                cost_map[i][j] = coordinate(i,j,INT_MAX);
+            }
         }
-    }
 
-    /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
-    cost_map[robotposeX-1][robotposeY-1].time_to_reach = curr_time;
-    cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
-    cost_map[robotposeX-1][robotposeY-1].update_fcost();
-    open.push(cost_map[robotposeX-1][robotposeY-1]);
+        /// At this point we have initialized all g values to inf and update all h_costs and f_costs according to heuristics
+        cost_map[robotposeX-1][robotposeY-1].time_to_reach = curr_time;
+        cost_map[robotposeX-1][robotposeY-1].gcost = (int)map[GETMAPINDEX(robotposeX,robotposeY,x_size,y_size)]; //See if -1 here also
+        cost_map[robotposeX-1][robotposeY-1].update_fcost();
+        open.push(cost_map[robotposeX-1][robotposeY-1]);
 
-    /// This stores the point and the various times to reach those points
-    unordered_map<int,vector<int>> point_time;      //This is only for target_points
+        /// This stores the point and the various times to reach those points
+        unordered_map<int,vector<int>> point_time;      //This is only for target_points
 
-    /// This stores the point and the count of the various times it was encountered in the trajectory
-    unordered_map<int,int> point_count;             //This is only for target_points
+        /// This stores the point and the count of the various times it was encountered in the trajectory
+        unordered_map<int,int> point_count;             //This is only for target_points
 
-    const auto target_trajectory_points = get_target_trajectory_and_count(target_traj,target_steps,point_count,y_size);
+        const auto target_trajectory_points = get_target_trajectory_and_count(target_traj,target_steps,point_count,y_size);
 
-    while (!open.empty())
-    {
-        const auto state_to_expand = open.top();
-        open.pop();
-        closed.insert(state_to_expand);
-        //debug_result(state_to_expand,1);
-        expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,curr_time,point_time,target_trajectory_points);
+        while (!open.empty())
+        {
+            const auto state_to_expand = open.top();
+            open.pop();
+            closed.insert(state_to_expand);
+            //debug_result(state_to_expand,1);
+            expand_state(state_to_expand,open,cost_map,dX,dY,x_size,y_size,map,closed,collision_thresh,curr_time,point_time,target_trajectory_points);
 //        cout<<"Expanded state was: "<<state_to_expand<<endl;
 //        cout<<"======================================================="<<endl;
+        }
+
+        auto stop = std::chrono::high_resolution_clock::now();
+        auto time_taken_to_plan = std::chrono::duration_cast<std::chrono::seconds>(stop - start);
+        const auto goal_coordinate = find_least_cost_path(std::move(point_count),std::move(point_time),cost_map,time_taken_to_plan.count()+1,x_size,y_size);
+
+        best_trajectory = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
     }
 
-   // const auto goal_coordinate = find_least_cost_path()
-
-//    const auto best_next_coordinate = backtrack(cost_map,dX,dY,x_size,y_size,goal_coordinate,start_coordinate);
-//    robotposeX = best_next_coordinate.first + 1;
-//    robotposeY = best_next_coordinate.second + 1; //These need to be 1 indexed coordinates
-    action_ptr[0] = robotposeX;
-    action_ptr[1] = robotposeY;
-
+    if(!(best_trajectory.size()-2-curr_time<0))
+        action_ptr[0] = best_trajectory[best_trajectory.size()-2-curr_time].first;
+        action_ptr[1] = best_trajectory[best_trajectory.size()-2-curr_time].second;
+    else
+        action_ptr[0] = best_trajectory[0].first;
+        action_ptr[1] = best_trajectory[0].second;
+        
     return;
 }
 
