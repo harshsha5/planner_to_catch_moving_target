@@ -1,4 +1,4 @@
-# planner_to_catch_moving_target    
+# Planner_to_catch_moving_target    
 Steps to run planner:  
 
 Step 1: Go to branch one-shot-planning   
